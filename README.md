@@ -1,310 +1,89 @@
 # PolyScript AI
 
-PolyScript AI는 영상과 음성 미디어를 분석하여 화자를 구분하고, 음성을 텍스트로 변환하며, 화자·캐릭터·번역 정보를 함께 관리하여 다국어 스크립트와 자막을 생성하는 AI 기반 미디어 처리 시스템입니다.
+PolyScript AI는 영상·음성을 분석하고 사용자가 검수·수정한 결과를 반복 청취와 Shadowing에 활용하는 **Windows 전용 개인용 데스크톱 애플리케이션**입니다. 원문·번역·화자·시간축을 연결하며, Script와 Subtitle을 독립적으로 내보내는 것을 목표로 합니다.
 
-단순한 Speech-to-Text 또는 Subtitle Generator를 넘어, **AI Processing → Human Review → Canonical Data → Trusted Knowledge → Learning**으로 이어지는 장기적인 데이터·학습 구조를 목표로 합니다.
+현재 프로젝트는 설계·문서화 단계입니다. 한국어 **v0.3 문서 세트는 검토본**이며 정식 설계 기준선은 아직 확정되지 않았습니다. UI, DB, 실행 프로세스, AI 엔진과 외부 연결 방식은 미결입니다.
 
-> 현재 프로젝트는 **설계 및 문서화 단계**에 있습니다.  
-> 본격적인 Production 구현은 Design Baseline 수립 이후 시작할 예정입니다.
+## 목표 경험
 
----
+`프로젝트 생성 → 미디어 입력 → AI 처리 → 검수·수정 → 반복 청취·Shadowing / 내보내기`
 
-## Project Goals
+- 원문·번역·화자·캐릭터·시간 정보를 함께 검수하고 수정합니다.
+- 사용자가 확인한 화자 프로필과 근거를 여러 개인 프로젝트에서 재사용합니다.
+- 긴 작업의 진행·실패를 확인하고 가능한 결과를 재사용해 재시도합니다.
+- 학습 기능과 독립적으로 Script 및 SRT/VTT/ASS 등의 Subtitle을 출력합니다.
 
-PolyScript는 다음 기능을 하나의 일관된 시스템으로 통합하는 것을 목표로 합니다.
+위 항목은 제품 목표이며 현재 구현 완료를 뜻하지 않습니다. 수십 분~약 1시간급 실제 미디어의 전체 흐름을 v1 검증 대상으로 삼으며, 구체 지원 상한과 장비별 품질·속도 기준은 미결입니다.
 
-- Media / Audio 입력 및 전처리
-- Speech Enhancement
-- Speaker Diarization
-- Overlap Speech 처리
-- ASR
-- Forced Alignment
-- Speaker Identification
-- Persistent Speaker Library
-- Character Management
-- Source Script 생성 및 수정
-- Multilingual Translation
-- Subtitle 생성
-- Human Review
-- Data Integrity / Quality Validation
-- Artifact / Dependency Tracking
-- Learning Dataset 관리
-- Model Training / Evaluation
-- Model Registry 및 Promotion / Rollback
-
-초기 언어 우선순위는 일본어 음성 처리 및 일본어↔한국어이며, 장기적으로 일본어·한국어·영어·중국어 확장을 고려합니다.
-
----
-
-## Core Principles
-
-PolyScript는 다음 원칙을 기반으로 설계됩니다.
-
-- **Local-first**
-- **Accuracy-first**
-- **Human-in-the-loop**
-- AI 결과는 기본적으로 검증 가능한 Candidate로 취급
-- 중요한 데이터와 결정은 추적 가능해야 함
-- AI Engine과 Model은 교체 가능해야 함
-- Processing과 Learning 환경 분리
-- Canonical Data, Trusted Data, Training Data를 구분
-- Versioning, Provenance, Data Lineage를 중요하게 취급
-- Data Integrity와 장기적인 확장성을 단기 구현 편의보다 우선
-
----
-
-## Core Domain Principle
-
-PolyScript에서 다음 세 개념은 서로 다른 Entity입니다.
-
-```text
-Project Speaker ≠ Persistent Speaker ≠ Character
-```
-
-### Project Speaker
-
-특정 Project 내부에서 Diarization을 통해 발견된 로컬 화자입니다.
-
-### Persistent Speaker
-
-여러 Project에서 재사용할 수 있는 장기적인 Speaker Profile입니다.
-
-### Character
-
-Project 내부에서 관리되는 독립적인 Character Entity입니다.
-
-한 명의 Persistent Speaker가 여러 Character를 담당할 수 있으며, 하나의 Character를 여러 Speaker가 담당할 수도 있습니다.
-
----
-
-## High-Level Architecture
-
-```text
-                    Browser
-                       │
-                       ▼
-                API / Control Plane
-                       │
-               Scheduler / Dispatcher
-                  │             │
-                  ▼             ▼
-            Core Server    Learning Server
-            27 Pipeline    Dataset / Training
-                  │         Evaluation / Model
-                  └──────┬──────┘
-                         ▼
-                    PostgreSQL
-                         +
-                   Shared Storage
-```
-
-- **API / Control Plane**: 사용자 요청 및 시스템 제어
-- **Core Server**: Media Processing 및 27-stage Pipeline
-- **Learning Server**: Dataset, Training, Evaluation, Model Build
-- **PostgreSQL**: 관계형 Metadata 및 Application State의 Source of Truth
-- **File/Object Storage**: Media, Audio, Artifact, Embedding, Dataset, Model 등 대용량 데이터 저장
-
----
-
-## Processing Pipeline
-
-PolyScript의 Core Processing은 현재 27개의 Conceptual Stage로 정의되어 있습니다.
-
-큰 흐름은 다음과 같습니다.
-
-```text
-Media
-  ↓
-Audio Preparation
-  ↓
-Speech Analysis
-  ↓
-Speaker Analysis
-  ↓
-ASR / Alignment
-  ↓
-Script
-  ↓
-Human Review
-  ↓
-Character / Translation
-  ↓
-Subtitle
-  ↓
-Output
-```
-
-Learning Pipeline은 Core Processing과 별도로 관리됩니다.
-
-```text
-Processing Result
-  ↓
-Validation
-  ↓
-Canonical Data
-  ↓
-Trust Evaluation
-  ↓
-Training Candidate
-  ↓
-Dataset
-  ↓
-Training
-  ↓
-Evaluation
-  ↓
-Approved Model
-```
-
----
-
-## Data Principles
-
-PolyScript는 다음 데이터를 서로 다른 상태로 취급합니다.
-
-```text
-AI Result ≠ Canonical Data
-Canonical Data ≠ Trusted Data
-Trusted Data ≠ Training Eligible Data
-Training Eligible Data ≠ Distribution Eligible Data
-```
-
-사용자가 수정한 데이터도 자동으로 Training Data가 되지 않습니다.
-
-또한 학습된 Model은 Evaluation과 명시적 승인 없이 Production Model로 자동 승격되지 않습니다.
-
----
-
-## Documentation
-
-PolyScript는 설계를 코드보다 먼저 명확히 정의하는 것을 중요하게 생각합니다.
-
-공식 설계 문서는 기본적으로 네 가지 Variant로 관리합니다.
-
-```text
-.spec.md  Canonical Technical Specification
-.ko.md    Korean / Owner Version
-.en.md    English Version
-.ja.md    Japanese Version
-```
-
-기술적 의미의 Canonical Source는 `.spec.md`입니다.
-
-주요 문서 구조는 다음과 같이 계획되어 있습니다.
-
-```text
-docs/
-├─ 00_foundation/
-├─ architecture/
-├─ domain/
-├─ database/
-├─ pipeline/
-├─ learning/
-├─ infrastructure/
-├─ security/
-├─ governance/
-└─ adr/
-```
-
-현재 첫 공식 Foundation 문서:
-
-```text
-FOUNDATION-001 — PolyScript Project Foundation
-```
-
----
-
-## Documentation Status
-
-현재 상태:
-
-```text
-Project Phase: DESIGN / DOCUMENTATION
-Implementation Status: NOT STARTED
-Foundation Status: DRAFT
-Design Baseline: NOT YET ESTABLISHED
-```
-
-본격적인 구현은 주요 Architecture, Domain, Data, Pipeline 및 Engineering Contract가 정리된 후 시작합니다.
-
----
-
-## Planned Development Flow
-
-```text
-Project Foundation
-        ↓
-System Context
-        ↓
-System Architecture
-        ↓
-Domain Architecture
-        ↓
-Data Architecture
-        ↓
-Processing Architecture
-        ↓
-Learning / Infrastructure / Security
-        ↓
-Engineering Contract
-        ↓
-Detailed Design
-        ↓
-Design Baseline v1.0
-        ↓
-Implementation
-        ↓
-Test / Review / Refactor
-```
-
----
-
-## AI-Assisted Development
-
-PolyScript는 AI-assisted development를 적극적으로 활용합니다.
-
-역할은 개념적으로 다음과 같이 구분합니다.
-
-```text
-Project Owner
-    ↓
-Architecture / Design
-    ↓
-Documented Specification
-    ↓
-Coding Agent
-    ↓
-Implementation
-    ↓
-Review / Validation
-```
-
-Coding Agent는 확정된 Architecture, Engineering Contract, ADR 및 Baseline Specification을 임의로 변경해서는 안 됩니다.
-
-설계상 모호한 부분은 구현 편의를 위해 임의로 결정하지 않고 `OPEN` 상태로 관리하거나 별도의 Architecture Decision을 거칩니다.
-
----
-
-## Current Status
-
-현재 PolyScript는 구현보다 **설계의 일관성, 추적성 및 장기 유지 가능성 확보**를 우선하고 있습니다.
-
-다음 주요 작업은 다음과 같습니다.
-
-1. `FOUNDATION-001` 검토 및 확정
-2. Canonical `.spec.md` 작성
-3. EN / JA Variant 생성
-4. System Context 작성
-5. System Architecture 작성
-6. Engineering Contract 및 Architecture Invariant 정리
-7. 상세 설계
-8. Design Baseline v1.0 수립
-9. Production Implementation 시작
-
----
-
-## License
-
-프로젝트 코드, 외부 AI Model, 학습 데이터 및 Media Content의 License는 서로 독립적으로 관리해야 합니다.
-
-세부 License 및 Data Usage Policy는 향후 별도 문서에서 정의합니다.
+## 설계 원칙
+
+- **Local-first + Cost-first:** 개인 환경과 비용을 우선하되 실행 위치와 외부 API 허용 범위는 별도 결정합니다.
+- **정보 손실을 줄이는 품질 전략:** 발화·화자 누락 같은 손실의 비용, 추가 계산의 효과, 처리 시간과 자원을 함께 평가합니다.
+- **사용자 검수와 수정 보호:** AI 결과를 후보로 다루고 재처리 시 사용자 수정을 무조건 덮어쓰지 않습니다.
+- **출처와 변경 영향 추적:** 입력·엔진·설정·검수 이력을 연결하고 오래된 번역·자막 등 후속 결과를 식별합니다.
+- **교체 가능한 엔진과 다국어 설계:** 특정 모델이나 언어에 도메인을 고정하지 않습니다. KO/JA/ZH/EN은 초기 우선 언어입니다.
+- **신뢰·허용 목적 분리:** 채택·신뢰·모델 학습·배포 가능 여부를 구분하며 사용자 수정을 자동 학습 데이터로 사용하지 않습니다.
+
+Project Speaker, Persistent Speaker, Character는 독립된 개념으로 관리합니다. 사용자의 언어학습 경험과 시스템의 분석 품질 개선도 구분합니다. 고급 모델 학습은 v1 필수조건이 아닙니다.
+
+## 현재 범위와 미결사항
+
+현재 범위는 Windows 개인용 데스크톱입니다. 다중 사용자 공동 작업과 SaaS 운영은 현재 필수 범위에 포함하지 않습니다.
+
+| 영역 | 현재 상태 |
+| --- | --- |
+| 제품 방향 | Windows 전용·개인용 데스크톱으로 확정 |
+| 문서 | 한국어 v0.3 검토본, 확정·유지·제안·미결 구분 |
+| UI·저장 | 프레임워크·DB·파일 배치 미선정 |
+| 처리 실행 | 프로세스·큐·앱 종료 및 재부팅 후 작업 동작 미결 |
+| AI | 엔진·모델·로컬/외부 API·원격 실행 범위 미결 |
+| 데이터 운용 | 원본 복사/참조·삭제·백업·보안 세부 방식 미결 |
+| 고급 Learning | 실제 도입 및 실행 격리·장비 배치 미결 |
+
+데스크톱 전환만으로 완전 오프라인이나 모든 AI의 로컬 실행을 확정하지 않습니다. 과거의 브라우저·서버·PostgreSQL 구성은 이전 기준이며 현재 배포 구조로 계승하지 않습니다. 논리 책임과 처리 흐름의 제안은 아키텍처 문서에 정리되어 있습니다.
+
+## 문서
+
+[전체 문서 안내](docs/README.md)에서 현재 문서와 이전 기준을 확인할 수 있습니다.
+
+| 문서 | 내용 |
+| --- | --- |
+| [프로젝트 기반 v0.3](docs/foundation/project_foundation.v0.3.ko.md) | 목적·범위·핵심 개념·설계 원칙 |
+| [의사결정 v0.3](docs/decisions/architecture_decisions.v0.3.ko.md) | ADR·결정 근거·대체 관계·미결 선택 |
+| [아키텍처 v0.3](docs/architecture/system_architecture.v0.3.ko.md) | 논리 책임·처리·검수·작업 수명주기 |
+| [데이터 정책 v0.3](docs/data/data_policy.v0.3.ko.md) | 출처·목적·보존·삭제·외부 전송·복구 |
+| [설계 전환 기록 v0.3](docs/history/migration_changelog.v0.3.ko.md) | 기존 기준 대비 변경·문서 정리 이력 |
+
+문서는 목적별 폴더에, 이전 버전과 과거 참고 자료는 [docs/old](docs/old)에 보관합니다. [Foundation v0.2](docs/old/foundation/project_foundation.v0.2.ko.md)의 ACCEPTED는 당시 승인 이력이며 현재 v0.3의 정식 승인을 뜻하지 않습니다.
+
+이번에는 한국어만 작성합니다. 장기 SPEC/KO/EN/JA 정책은 폐기하지 않았으나 의미 동기화나 정식 기준선 승격을 완료한 상태는 아닙니다. 문서 작업은 [docs/AGENTS.md](docs/AGENTS.md)를 따릅니다.
+
+## 다음 설계 작업
+
+미디어 복사/참조와 앱 종료 시 작업 동작을 먼저 정하고, 목표 장비·미디어를 기준으로 UI·저장·실행 방식·엔진을 비교하는 순서를 제안합니다. 구현 선택은 ADR로 기록하고 미결사항을 편의상 확정하지 않습니다. 현재 검토본을 공유하는 것과 정식 설계 승인은 구분합니다.
+
+## 자료와 이용 안내
+
+프로젝트 코드, 외부 모델, 학습 자료와 미디어의 라이선스는 독립적으로 확인합니다. 데이터 사용 원칙은 [데이터 정책](docs/data/data_policy.v0.3.ko.md)에 정리되어 있습니다.
+
+> ## 프로젝트 목적 및 이용 안내
+>
+> **PolyScript AI는 AI를 활용한 설계 기반 개발(Design-Driven AI-Assisted / Vibe Coding) 방식으로 제작되는 개인 학습·연구 목적의 프로젝트입니다.**
+>
+> 본 프로젝트는 단순히 AI가 생성한 코드를 조합하는 것을 목표로 하지 않으며, 사전에 정의된 시스템 설계, 아키텍처, 도메인 모델, 데이터 정책 및 문서화 기준을 바탕으로 AI 도구를 개발 보조 수단으로 활용합니다.
+>
+> 현재 프로젝트의 주된 목적은 음성 인식, 화자 분리, 번역, 자막 생성, 데이터 관리, AI 모델 및 소프트웨어 아키텍처 등에 대한 **개인적인 학습과 기술 연구**입니다.
+>
+> 본 프로젝트는 제3자의 저작권, 초상권, 퍼블리시티권, 개인정보, 서비스 이용약관 또는 기타 권리를 침해할 것을 목적으로 하지 않습니다.
+>
+> 프로젝트 개발 또는 테스트 과정에서 사용되는 미디어, 음성, 영상, 스크립트, 자막, 모델 및 기타 자료에 대한 권리는 각 원저작자 및 권리자에게 귀속될 수 있습니다. 사용자는 자신이 처리하는 콘텐츠에 대해 필요한 이용 권한을 직접 확인해야 합니다.
+>
+> 본 Repository는 원칙적으로 제3자의 저작권이 있는 원본 미디어를 배포하기 위한 용도로 사용하지 않습니다.
+>
+> 만약 본 프로젝트에 포함된 자료 또는 내용이 제3자의 권리를 침해한다고 판단되는 경우, 정당한 권리자의 요청과 사실관계를 확인한 후 해당 자료의 수정, 비공개 또는 삭제 등의 조치를 검토합니다.
+>
+> 본 소프트웨어를 이용하여 사용자가 직접 입력하거나 처리하는 콘텐츠 및 그 이용 방식에 대한 책임은 해당 사용자에게 있습니다. 사용자는 자신의 국가 또는 지역에 적용되는 법률, 저작권, 라이선스 및 관련 서비스의 이용약관을 확인한 후 본 소프트웨어를 사용해야 합니다.
+>
+> 본 프로젝트의 개발자 및 기여자는 관련 법률이 허용하는 범위 내에서, 사용자가 본 소프트웨어를 이용하는 과정에서 발생한 저작권 침해, 서비스 이용 제한, 계정 제재, 데이터 손실 또는 기타 직접·간접적인 불이익에 대해 책임을 부담하지 않습니다.
+>
+> 이 안내문은 법률 자문을 제공하거나 법적 책임의 완전한 면제를 보장하기 위한 것이 아닙니다.
